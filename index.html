@@ -3140,24 +3140,40 @@ POKEMON_LISTS.tcglive.forEach(p => { dataTCGLive[p] = EMPTY_TCGLIVE(); });
 let MOVES_ES_LOOKUP_LOWER = {};
 // Nombres en inglés tal cual (para ofrecerlos como sugerencia mientras se escribe).
 let MOVES_ES_ENGLISH_NAMES = [];
+// Tipo de cada movimiento (moves-types.json, también de wikidex.net), buscable
+// tanto por su nombre en español como en inglés, sin importar mayúsculas.
+let MOVE_TYPE_LOOKUP_LOWER = {};
 
 async function loadMovesEsDict() {
   try {
     const res = await fetch('moves-es.json');
-    if (!res.ok) return;
-    const data = await res.json();
-    Object.keys(data).forEach(en => {
-      if (en.startsWith('_')) return; // saltar metadata (ej. "_atribucion")
-      MOVES_ES_LOOKUP_LOWER[en.trim().toLowerCase()] = data[en];
-      MOVES_ES_ENGLISH_NAMES.push(en);
-    });
-    // Si el diccionario tardó en llegar y las tablas ya se habían dibujado
-    // sin sugerencias en inglés, se reconstruyen ahora que ya está disponible.
-    if (typeof rebuildChampionsSuggestions === 'function') rebuildChampionsSuggestions();
-    if (typeof rebuildGoSuggestions === 'function') rebuildGoSuggestions();
+    if (res.ok) {
+      const data = await res.json();
+      Object.keys(data).forEach(en => {
+        if (en.startsWith('_')) return; // saltar metadata (ej. "_atribucion")
+        MOVES_ES_LOOKUP_LOWER[en.trim().toLowerCase()] = data[en];
+        MOVES_ES_ENGLISH_NAMES.push(en);
+      });
+    }
   } catch (e) {
     console.log('No se pudo cargar moves-es.json', e);
   }
+  try {
+    const res2 = await fetch('moves-types.json');
+    if (res2.ok) {
+      const data2 = await res2.json();
+      Object.keys(data2).forEach(k => {
+        if (k.startsWith('_')) return;
+        MOVE_TYPE_LOOKUP_LOWER[k.trim().toLowerCase()] = data2[k];
+      });
+    }
+  } catch (e) {
+    console.log('No se pudo cargar moves-types.json', e);
+  }
+  // Si los diccionarios tardaron en llegar y las tablas ya se habían dibujado
+  // sin sugerencias, se reconstruyen ahora que ya están disponibles.
+  if (typeof rebuildChampionsSuggestions === 'function') rebuildChampionsSuggestions();
+  if (typeof rebuildGoSuggestions === 'function') rebuildGoSuggestions();
 }
 loadMovesEsDict();
 
@@ -3170,49 +3186,101 @@ function translateMoveIfEnglish(value) {
   return found && found !== value ? found : null;
 }
 
+// Busca el tipo de un movimiento por su nombre (en español o inglés). Primero
+// consulta el diccionario de wikidex.net; si el movimiento no está ahí (por
+// ejemplo, uno que el propio usuario agregó a mano), busca si ese mismo
+// nombre ya tiene un tipo asignado en algún otro Pokémon ya cargado.
+function getKnownMoveType(moveName) {
+  if (!moveName) return null;
+  const key = moveName.trim().toLowerCase();
+  if (MOVE_TYPE_LOOKUP_LOWER[key]) return MOVE_TYPE_LOOKUP_LOWER[key];
+  for (const d of Object.values(dataChampions)) {
+    if (d.ataque1 && d.ataque1.trim().toLowerCase() === key && d.tipo1) return d.tipo1;
+    if (d.ataque2 && d.ataque2.trim().toLowerCase() === key && d.tipo2) return d.tipo2;
+    if (d.ataque3 && d.ataque3.trim().toLowerCase() === key && d.tipo3) return d.tipo3;
+    if (d.ataque4 && d.ataque4.trim().toLowerCase() === key && d.tipo4) return d.tipo4;
+  }
+  for (const d of Object.values(dataGO)) {
+    if (d.movRapido && d.movRapido.trim().toLowerCase() === key && d.tipoRapido) return d.tipoRapido;
+    if (d.movCargado && d.movCargado.trim().toLowerCase() === key && d.tipoCargado) return d.tipoCargado;
+  }
+  return null;
+}
+
+const MOVE_FIELD_TO_TYPE_FIELD = {
+  ataque1: 'tipo1', ataque2: 'tipo2', ataque3: 'tipo3', ataque4: 'tipo4',
+  movRapido: 'tipoRapido', movCargado: 'tipoCargado'
+};
+
 // Se engancha en el evento "blur" (al salir del campo) de los inputs de
-// movimientos, tanto de Champions como de GO.
+// movimientos, tanto de Champions como de GO: traduce si hace falta, y
+// autocompleta el tipo (solo si ese casillero de tipo todavía está vacío).
 function bindMoveTranslationBlur(tbody) {
   tbody.querySelectorAll('.move-name-input').forEach(input => {
     input.addEventListener('blur', () => {
-      const translated = translateMoveIfEnglish(input.value);
-      if (!translated) return;
-      input.value = translated;
       const p = input.dataset.pokemon, f = input.dataset.field, game = input.dataset.game;
       const store = game === 'champions' ? dataChampions : dataGO;
       if (!store[p]) store[p] = game === 'champions' ? EMPTY_CHAMPIONS() : EMPTY_GO();
-      store[p][f] = translated;
+
+      const translated = translateMoveIfEnglish(input.value);
+      if (translated) {
+        input.value = translated;
+        store[p][f] = translated;
+      }
+
+      const typeField = MOVE_FIELD_TO_TYPE_FIELD[f];
+      if (typeField && !store[p][typeField]) {
+        const knownType = getKnownMoveType(store[p][f]);
+        if (knownType) {
+          store[p][typeField] = knownType;
+          const row = input.closest('tr');
+          const select = row ? row.querySelector(`select[data-field="${typeField}"]`) : null;
+          if (select) {
+            select.value = knownType;
+            const wrap = select.nextElementSibling;
+            if (wrap) wrap.innerHTML = typeIconHTML(knownType);
+          }
+        }
+      }
       persistAll();
     });
   });
 }
 
 function translateExistingChampionsMoves() {
-  let count = 0;
+  let count = 0, tipos = 0;
   Object.keys(dataChampions).forEach(name => {
     const d = dataChampions[name];
-    ['ataque1', 'ataque2', 'ataque3', 'ataque4'].forEach(f => {
+    [['ataque1','tipo1'], ['ataque2','tipo2'], ['ataque3','tipo3'], ['ataque4','tipo4']].forEach(([f, tf]) => {
       const t = translateMoveIfEnglish(d[f]);
       if (t) { d[f] = t; count++; }
+      if (!d[tf]) {
+        const knownType = getKnownMoveType(d[f]);
+        if (knownType) { d[tf] = knownType; tipos++; }
+      }
     });
   });
   persistAll();
   renderTableChampions();
-  showToast(`✅ ${count} ataque(s) traducido(s)`);
+  showToast(`✅ ${count} ataque(s) traducido(s), ${tipos} tipo(s) completado(s)`);
 }
 
 function translateExistingGoMoves() {
-  let count = 0;
+  let count = 0, tipos = 0;
   Object.keys(dataGO).forEach(name => {
     const d = dataGO[name];
-    ['movRapido', 'movCargado'].forEach(f => {
+    [['movRapido','tipoRapido'], ['movCargado','tipoCargado']].forEach(([f, tf]) => {
       const t = translateMoveIfEnglish(d[f]);
       if (t) { d[f] = t; count++; }
+      if (!d[tf]) {
+        const knownType = getKnownMoveType(d[f]);
+        if (knownType) { d[tf] = knownType; tipos++; }
+      }
     });
   });
   persistAll();
   renderTableGO();
-  showToast(`✅ ${count} movimiento(s) traducido(s)`);
+  showToast(`✅ ${count} movimiento(s) traducido(s), ${tipos} tipo(s) completado(s)`);
 }
 
 function loadFromStorage() {
