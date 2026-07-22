@@ -2661,12 +2661,22 @@ function getSpriteSlug(name) {
 
 // ── CARGA DE SPRITES CON FUENTES ALTERNATIVAS ───────────────────────────
 async function getSpriteCandidates(name) {
+  const { form } = parseGoFormName(name);
   const slug = getSpriteSlug(name);
   const candidates = [];
   try {
     const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${slug}`);
     if (res.ok) {
       const data = await res.json();
+      // Ícono real de Pokémon GO (extraído de los propios assets del juego vía
+      // PokeMiners), priorizado por sobre cualquier otro render — es el estilo
+      // específico que se pidió. Solo aplica a la forma base: las formas
+      // regionales usan sufijos propios de GO que no siempre coinciden con
+      // los que ya manejamos para PokeAPI, así que esas siguen la cadena de
+      // abajo (HOME / artwork oficial / PokemonDB / Showdown).
+      if (form === 'normal' && data.id) {
+        candidates.push(`https://raw.githubusercontent.com/PokeMiners/pogo_assets/master/Images/Pokemon/Addressable%20Assets/pm${data.id}.icon.png`);
+      }
       // Render 3D estilo Pokémon HOME (lo más parecido a los modelos 3D de Pokémon GO)
       const homeUrl = data.sprites?.other?.home?.front_default;
       // Artwork oficial 2D como respaldo
