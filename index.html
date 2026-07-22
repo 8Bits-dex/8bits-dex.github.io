@@ -1915,6 +1915,7 @@
   }
   .search-disclaimer a { color: var(--yellow); text-decoration: underline; }
   .move-type-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+  .translate-moves-toolbar { display: flex; justify-content: flex-end; margin-bottom: 14px; }
   .move-type-select { flex: 1; font-size: 0.72rem; padding: 4px 6px; }
   .move-type-icon-wrap { display: flex; align-items: center; }
   .move-type-icon { width: 30px; height: 30px; object-fit: contain; flex-shrink: 0; }
@@ -2009,7 +2010,7 @@
           <div class="autocomplete-list" id="autocomplete-list"></div>
         </div>
         <div class="search-disclaimer">
-          Los ataques aparecen con su nombre original y traducido automáticamente. En caso de dudas, comunicate con el administrador por <a href="https://discord.gg/wx523tHb" target="_blank" rel="noopener">Discord</a>.
+          La traducción de los ataques es posible gracias a <a href="https://www.wikidex.net" target="_blank" rel="noopener">Wikidex.net</a>. Ante cualquier duda o consulta, utilizá el botón de Discord de abajo.
         </div>
       </div>
 
@@ -2085,6 +2086,9 @@
 
     <!-- ===== CHAMPIONS ===== -->
     <div class="mode-section active" id="mode-section-champions">
+      <div class="translate-moves-toolbar">
+        <button class="btn btn-primary" onclick="translateExistingChampionsMoves()">🌐 Traducir movimientos existentes</button>
+      </div>
       <div class="pokemon-table-wrap">
         <table id="pokemon-table-champions">
           <thead>
@@ -2107,6 +2111,9 @@
 
     <!-- ===== POKÉMON GO ===== -->
     <div class="mode-section" id="mode-section-go">
+      <div class="translate-moves-toolbar">
+        <button class="btn btn-primary" onclick="translateExistingGoMoves()">🌐 Traducir movimientos existentes</button>
+      </div>
       <div class="pokemon-table-wrap">
         <table id="pokemon-table-go">
           <thead>
@@ -3127,6 +3134,80 @@ POKEMON_LISTS.go.forEach(p => { dataGO[p] = EMPTY_GO(); });
 POKEMON_LISTS.tcg.forEach(p => { dataTCG[p] = EMPTY_TCG(); });
 POKEMON_LISTS.tcglive.forEach(p => { dataTCGLive[p] = EMPTY_TCGLIVE(); });
 
+// ── TRADUCCIÓN DE MOVIMIENTOS (inglés → español) ────────────────────────────
+// Diccionario cargado desde moves-es.json (datos de wikidex.net). Se busca
+// sin importar mayúsculas/minúsculas, así "close combat" también matchea.
+let MOVES_ES_LOOKUP_LOWER = {};
+
+async function loadMovesEsDict() {
+  try {
+    const res = await fetch('moves-es.json');
+    if (!res.ok) return;
+    const data = await res.json();
+    Object.keys(data).forEach(en => {
+      if (en.startsWith('_')) return; // saltar metadata (ej. "_atribucion")
+      MOVES_ES_LOOKUP_LOWER[en.trim().toLowerCase()] = data[en];
+    });
+  } catch (e) {
+    console.log('No se pudo cargar moves-es.json', e);
+  }
+}
+loadMovesEsDict();
+
+// Si "value" coincide con un nombre en inglés conocido, devuelve su traducción
+// al español. Si no coincide con nada (porque ya está en español, o no está en
+// el diccionario), devuelve null y no se toca lo que el usuario escribió.
+function translateMoveIfEnglish(value) {
+  if (!value) return null;
+  const found = MOVES_ES_LOOKUP_LOWER[value.trim().toLowerCase()];
+  return found && found !== value ? found : null;
+}
+
+// Se engancha en el evento "blur" (al salir del campo) de los inputs de
+// movimientos, tanto de Champions como de GO.
+function bindMoveTranslationBlur(tbody) {
+  tbody.querySelectorAll('.move-name-input').forEach(input => {
+    input.addEventListener('blur', () => {
+      const translated = translateMoveIfEnglish(input.value);
+      if (!translated) return;
+      input.value = translated;
+      const p = input.dataset.pokemon, f = input.dataset.field, game = input.dataset.game;
+      const store = game === 'champions' ? dataChampions : dataGO;
+      if (!store[p]) store[p] = game === 'champions' ? EMPTY_CHAMPIONS() : EMPTY_GO();
+      store[p][f] = translated;
+      persistAll();
+    });
+  });
+}
+
+function translateExistingChampionsMoves() {
+  let count = 0;
+  Object.keys(dataChampions).forEach(name => {
+    const d = dataChampions[name];
+    ['ataque1', 'ataque2', 'ataque3', 'ataque4'].forEach(f => {
+      const t = translateMoveIfEnglish(d[f]);
+      if (t) { d[f] = t; count++; }
+    });
+  });
+  persistAll();
+  renderTableChampions();
+  showToast(`✅ ${count} ataque(s) traducido(s)`);
+}
+
+function translateExistingGoMoves() {
+  let count = 0;
+  Object.keys(dataGO).forEach(name => {
+    const d = dataGO[name];
+    ['movRapido', 'movCargado'].forEach(f => {
+      const t = translateMoveIfEnglish(d[f]);
+      if (t) { d[f] = t; count++; }
+    });
+  });
+  persistAll();
+  renderTableGO();
+  showToast(`✅ ${count} movimiento(s) traducido(s)`);
+}
+
 function loadFromStorage() {
   try {
     // Lista vieja compartida (solo para migración de instalaciones previas)
@@ -3542,28 +3623,28 @@ function renderTableChampions() {
       <td><input class="editable-cell" list="suggest-champions-naturaleza" data-pokemon="${esc(name)}" data-field="naturaleza" value="${esc(d.naturaleza)}" placeholder="Ej: Jolly"></td>
       <td><input class="editable-cell" list="suggest-champions-objeto" data-pokemon="${esc(name)}" data-field="objeto" value="${esc(d.objeto)}" placeholder="Ej: Choice Band"></td>
       <td>
-        <input class="editable-cell" list="suggest-champions-ataque" data-pokemon="${esc(name)}" data-field="ataque1" value="${esc(d.ataque1)}" placeholder="Ataque 1">
+        <input class="editable-cell move-name-input" list="suggest-champions-ataque" data-pokemon="${esc(name)}" data-field="ataque1" data-game="champions" value="${esc(d.ataque1)}" placeholder="Ataque 1">
         <div class="move-type-row">
           <select class="move-type-select" data-pokemon="${esc(name)}" data-field="tipo1">${typeOptionsHTML(d.tipo1)}</select>
           <span class="move-type-icon-wrap">${typeIconHTML(d.tipo1)}</span>
         </div>
       </td>
       <td>
-        <input class="editable-cell" list="suggest-champions-ataque" data-pokemon="${esc(name)}" data-field="ataque2" value="${esc(d.ataque2)}" placeholder="Ataque 2">
+        <input class="editable-cell move-name-input" list="suggest-champions-ataque" data-pokemon="${esc(name)}" data-field="ataque2" data-game="champions" value="${esc(d.ataque2)}" placeholder="Ataque 2">
         <div class="move-type-row">
           <select class="move-type-select" data-pokemon="${esc(name)}" data-field="tipo2">${typeOptionsHTML(d.tipo2)}</select>
           <span class="move-type-icon-wrap">${typeIconHTML(d.tipo2)}</span>
         </div>
       </td>
       <td>
-        <input class="editable-cell" list="suggest-champions-ataque" data-pokemon="${esc(name)}" data-field="ataque3" value="${esc(d.ataque3)}" placeholder="Ataque 3">
+        <input class="editable-cell move-name-input" list="suggest-champions-ataque" data-pokemon="${esc(name)}" data-field="ataque3" data-game="champions" value="${esc(d.ataque3)}" placeholder="Ataque 3">
         <div class="move-type-row">
           <select class="move-type-select" data-pokemon="${esc(name)}" data-field="tipo3">${typeOptionsHTML(d.tipo3)}</select>
           <span class="move-type-icon-wrap">${typeIconHTML(d.tipo3)}</span>
         </div>
       </td>
       <td>
-        <input class="editable-cell" list="suggest-champions-ataque" data-pokemon="${esc(name)}" data-field="ataque4" value="${esc(d.ataque4)}" placeholder="Ataque 4">
+        <input class="editable-cell move-name-input" list="suggest-champions-ataque" data-pokemon="${esc(name)}" data-field="ataque4" data-game="champions" value="${esc(d.ataque4)}" placeholder="Ataque 4">
         <div class="move-type-row">
           <select class="move-type-select" data-pokemon="${esc(name)}" data-field="tipo4">${typeOptionsHTML(d.tipo4)}</select>
           <span class="move-type-icon-wrap">${typeIconHTML(d.tipo4)}</span>
@@ -3590,6 +3671,7 @@ function renderTableChampions() {
     });
   });
   bindNameCellEvents(tbody);
+  bindMoveTranslationBlur(tbody);
   rebuildChampionsSuggestions();
 }
 
@@ -3605,14 +3687,14 @@ function renderTableGO() {
       <td><input class="editable-cell stat-slash-input" data-pokemon="${esc(name)}" data-field="statsSuper" value="${esc(d.statsSuper)}" placeholder="Ej: 15/14/14"></td>
       <td><input class="editable-cell stat-slash-input" data-pokemon="${esc(name)}" data-field="statsUltra" value="${esc(d.statsUltra)}" placeholder="Ej: 13/13/13"></td>
       <td>
-        <input class="editable-cell" list="suggest-go-movimiento" data-pokemon="${esc(name)}" data-field="movRapido" value="${esc(d.movRapido)}" placeholder="Ej: Roca Afilada">
+        <input class="editable-cell move-name-input" list="suggest-go-movimiento" data-pokemon="${esc(name)}" data-field="movRapido" data-game="go" value="${esc(d.movRapido)}" placeholder="Ej: Roca Afilada">
         <div class="move-type-row">
           <select class="move-type-select" data-pokemon="${esc(name)}" data-field="tipoRapido">${typeOptionsHTML(d.tipoRapido)}</select>
           <span class="move-type-icon-wrap">${typeIconHTML(d.tipoRapido)}</span>
         </div>
       </td>
       <td>
-        <input class="editable-cell" list="suggest-go-movimiento" data-pokemon="${esc(name)}" data-field="movCargado" value="${esc(d.movCargado)}" placeholder="Ej: Avalancha">
+        <input class="editable-cell move-name-input" list="suggest-go-movimiento" data-pokemon="${esc(name)}" data-field="movCargado" data-game="go" value="${esc(d.movCargado)}" placeholder="Ej: Avalancha">
         <div class="move-type-row">
           <select class="move-type-select" data-pokemon="${esc(name)}" data-field="tipoCargado">${typeOptionsHTML(d.tipoCargado)}</select>
           <span class="move-type-icon-wrap">${typeIconHTML(d.tipoCargado)}</span>
@@ -3653,6 +3735,7 @@ function renderTableGO() {
     });
   });
   bindNameCellEvents(tbody);
+  bindMoveTranslationBlur(tbody);
   rebuildGoSuggestions();
 }
 
