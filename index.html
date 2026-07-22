@@ -3058,7 +3058,8 @@ const EMPTY_CHAMPIONS = () => ({ naturaleza:'', objeto:'', ataque1:'', tipo1:'',
 const EMPTY_GO         = () => ({ cpMax:'', statsSuper:'', statsUltra:'', movRapido:'', tipoRapido:'', movCargado:'', tipoCargado:'' });
 
 // ── ICONOS DE TIPO (Pokémon GO: ataque rápido / cargado) ────────────────────
-const TYPE_LIST = ['Normal','Fuego','Agua','Electrico','Planta','Hielo','Lucha','Veneno','Tierra','Volador','Psiquico','Bicho','Roca','Fantasma','Dragon','Siniestro','Metal','Hada'];
+// Orden alfabético según el nombre en español (Agua, Bicho, Dragón, Eléctrico...)
+const TYPE_LIST = ['Agua','Bicho','Dragon','Electrico','Fantasma','Fuego','Hada','Hielo','Lucha','Metal','Normal','Planta','Psiquico','Roca','Siniestro','Tierra','Veneno','Volador'];
 const TYPE_LABELS = { Electrico: 'Eléctrico', Psiquico: 'Psíquico', Dragon: 'Dragón' };
 function typeLabel(t) { return TYPE_LABELS[t] || t; }
 const TYPE_ICONS_B64 = {
@@ -3538,31 +3539,31 @@ function renderTableChampions() {
     return `<tr data-name="${esc(name).toLowerCase()}">
       <td style="color:var(--muted);font-size:0.8rem">${i+1}</td>
       <td><input class="editable-cell name-cell" data-original-name="${esc(name)}" value="${esc(name)}" placeholder="Nombre"></td>
-      <td><input class="editable-cell" data-pokemon="${esc(name)}" data-field="naturaleza" value="${esc(d.naturaleza)}" placeholder="Ej: Jolly"></td>
-      <td><input class="editable-cell" data-pokemon="${esc(name)}" data-field="objeto" value="${esc(d.objeto)}" placeholder="Ej: Choice Band"></td>
+      <td><input class="editable-cell" list="suggest-champions-naturaleza" data-pokemon="${esc(name)}" data-field="naturaleza" value="${esc(d.naturaleza)}" placeholder="Ej: Jolly"></td>
+      <td><input class="editable-cell" list="suggest-champions-objeto" data-pokemon="${esc(name)}" data-field="objeto" value="${esc(d.objeto)}" placeholder="Ej: Choice Band"></td>
       <td>
-        <input class="editable-cell" data-pokemon="${esc(name)}" data-field="ataque1" value="${esc(d.ataque1)}" placeholder="Ataque 1">
+        <input class="editable-cell" list="suggest-champions-ataque" data-pokemon="${esc(name)}" data-field="ataque1" value="${esc(d.ataque1)}" placeholder="Ataque 1">
         <div class="move-type-row">
           <select class="move-type-select" data-pokemon="${esc(name)}" data-field="tipo1">${typeOptionsHTML(d.tipo1)}</select>
           <span class="move-type-icon-wrap">${typeIconHTML(d.tipo1)}</span>
         </div>
       </td>
       <td>
-        <input class="editable-cell" data-pokemon="${esc(name)}" data-field="ataque2" value="${esc(d.ataque2)}" placeholder="Ataque 2">
+        <input class="editable-cell" list="suggest-champions-ataque" data-pokemon="${esc(name)}" data-field="ataque2" value="${esc(d.ataque2)}" placeholder="Ataque 2">
         <div class="move-type-row">
           <select class="move-type-select" data-pokemon="${esc(name)}" data-field="tipo2">${typeOptionsHTML(d.tipo2)}</select>
           <span class="move-type-icon-wrap">${typeIconHTML(d.tipo2)}</span>
         </div>
       </td>
       <td>
-        <input class="editable-cell" data-pokemon="${esc(name)}" data-field="ataque3" value="${esc(d.ataque3)}" placeholder="Ataque 3">
+        <input class="editable-cell" list="suggest-champions-ataque" data-pokemon="${esc(name)}" data-field="ataque3" value="${esc(d.ataque3)}" placeholder="Ataque 3">
         <div class="move-type-row">
           <select class="move-type-select" data-pokemon="${esc(name)}" data-field="tipo3">${typeOptionsHTML(d.tipo3)}</select>
           <span class="move-type-icon-wrap">${typeIconHTML(d.tipo3)}</span>
         </div>
       </td>
       <td>
-        <input class="editable-cell" data-pokemon="${esc(name)}" data-field="ataque4" value="${esc(d.ataque4)}" placeholder="Ataque 4">
+        <input class="editable-cell" list="suggest-champions-ataque" data-pokemon="${esc(name)}" data-field="ataque4" value="${esc(d.ataque4)}" placeholder="Ataque 4">
         <div class="move-type-row">
           <select class="move-type-select" data-pokemon="${esc(name)}" data-field="tipo4">${typeOptionsHTML(d.tipo4)}</select>
           <span class="move-type-icon-wrap">${typeIconHTML(d.tipo4)}</span>
@@ -3589,6 +3590,7 @@ function renderTableChampions() {
     });
   });
   bindNameCellEvents(tbody);
+  rebuildChampionsSuggestions();
 }
 
 // ── TABLA GO ───────────────────────────────────────────────────────────────
@@ -3599,18 +3601,18 @@ function renderTableGO() {
     return `<tr data-name="${esc(name).toLowerCase()}">
       <td style="color:var(--muted);font-size:0.8rem">${i+1}</td>
       <td><input class="editable-cell name-cell" data-original-name="${esc(name)}" value="${esc(name)}" placeholder="Nombre"></td>
-      <td><input class="editable-cell" data-pokemon="${esc(name)}" data-field="cpMax" value="${esc(d.cpMax)}" placeholder="Ej: 3500"></td>
-      <td><input class="editable-cell" data-pokemon="${esc(name)}" data-field="statsSuper" value="${esc(d.statsSuper)}" placeholder="Ej: 15/14/14"></td>
-      <td><input class="editable-cell" data-pokemon="${esc(name)}" data-field="statsUltra" value="${esc(d.statsUltra)}" placeholder="Ej: 13/13/13"></td>
+      <td><input class="editable-cell" list="suggest-go-cpmax" data-pokemon="${esc(name)}" data-field="cpMax" value="${esc(d.cpMax)}" placeholder="Ej: 3500"></td>
+      <td><input class="editable-cell stat-slash-input" data-pokemon="${esc(name)}" data-field="statsSuper" value="${esc(d.statsSuper)}" placeholder="Ej: 15/14/14"></td>
+      <td><input class="editable-cell stat-slash-input" data-pokemon="${esc(name)}" data-field="statsUltra" value="${esc(d.statsUltra)}" placeholder="Ej: 13/13/13"></td>
       <td>
-        <input class="editable-cell" data-pokemon="${esc(name)}" data-field="movRapido" value="${esc(d.movRapido)}" placeholder="Ej: Roca Afilada">
+        <input class="editable-cell" list="suggest-go-movimiento" data-pokemon="${esc(name)}" data-field="movRapido" value="${esc(d.movRapido)}" placeholder="Ej: Roca Afilada">
         <div class="move-type-row">
           <select class="move-type-select" data-pokemon="${esc(name)}" data-field="tipoRapido">${typeOptionsHTML(d.tipoRapido)}</select>
           <span class="move-type-icon-wrap">${typeIconHTML(d.tipoRapido)}</span>
         </div>
       </td>
       <td>
-        <input class="editable-cell" data-pokemon="${esc(name)}" data-field="movCargado" value="${esc(d.movCargado)}" placeholder="Ej: Avalancha">
+        <input class="editable-cell" list="suggest-go-movimiento" data-pokemon="${esc(name)}" data-field="movCargado" value="${esc(d.movCargado)}" placeholder="Ej: Avalancha">
         <div class="move-type-row">
           <select class="move-type-select" data-pokemon="${esc(name)}" data-field="tipoCargado">${typeOptionsHTML(d.tipoCargado)}</select>
           <span class="move-type-icon-wrap">${typeIconHTML(d.tipoCargado)}</span>
@@ -3620,11 +3622,25 @@ function renderTableGO() {
     </tr>`;
   }).join('');
 
-  tbody.querySelectorAll('.editable-cell:not(.name-cell)').forEach(input => {
+  tbody.querySelectorAll('.editable-cell:not(.name-cell):not(.stat-slash-input)').forEach(input => {
     input.addEventListener('input', () => {
       const p = input.dataset.pokemon, f = input.dataset.field;
       if (!dataGO[p]) dataGO[p] = EMPTY_GO();
       dataGO[p][f] = input.value;
+    });
+  });
+  // Stats Liga Super/Ultra: mientras se escribe, se le agrega la "/" sola
+  // cada 2 dígitos (ej: "151415" → "15/14/15"), sin sugerencias de autocompletado.
+  tbody.querySelectorAll('.stat-slash-input').forEach(input => {
+    input.addEventListener('input', () => {
+      const digits = input.value.replace(/\D/g, '').slice(0, 6);
+      const groups = [];
+      for (let j = 0; j < digits.length; j += 2) groups.push(digits.slice(j, j + 2));
+      const formatted = groups.join('/');
+      input.value = formatted;
+      const p = input.dataset.pokemon, f = input.dataset.field;
+      if (!dataGO[p]) dataGO[p] = EMPTY_GO();
+      dataGO[p][f] = formatted;
     });
   });
   tbody.querySelectorAll('.move-type-select').forEach(select => {
@@ -3637,6 +3653,7 @@ function renderTableGO() {
     });
   });
   bindNameCellEvents(tbody);
+  rebuildGoSuggestions();
 }
 
 // ── TABLA TCG POCKET ────────────────────────────────────────────────────────
@@ -4004,6 +4021,47 @@ async function confirmDeleteMazo(idx, mode) {
 
 let mazoEditingIdx = null;
 let mazoEditingMode = 'mazos';
+
+// ── SUGERENCIAS DE TEXTO (autocompletado según lo ya escrito) ───────────────
+// Junta los valores no vacíos de un conjunto de campos (a través de todos los
+// Pokémon) en un <datalist>, para sugerir mientras se escribe. No aplica a los
+// nombres de Pokémon ni a Stats Liga Super/Ultra (esos tienen su propia lógica).
+function rebuildSuggestDatalist(id, values) {
+  const existing = document.getElementById(id);
+  if (existing) existing.remove();
+  const datalist = document.createElement('datalist');
+  datalist.id = id;
+  const unique = [...new Set(values.filter(v => v && v.trim()))].sort((a, b) => a.localeCompare(b, 'es'));
+  unique.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v;
+    datalist.appendChild(opt);
+  });
+  document.body.appendChild(datalist);
+}
+
+function rebuildGoSuggestions() {
+  const cpValues = [], movValues = [];
+  Object.values(dataGO).forEach(d => {
+    if (d.cpMax) cpValues.push(d.cpMax);
+    if (d.movRapido) movValues.push(d.movRapido);
+    if (d.movCargado) movValues.push(d.movCargado);
+  });
+  rebuildSuggestDatalist('suggest-go-cpmax', cpValues);
+  rebuildSuggestDatalist('suggest-go-movimiento', movValues);
+}
+
+function rebuildChampionsSuggestions() {
+  const naturalezaValues = [], objetoValues = [], ataqueValues = [];
+  Object.values(dataChampions).forEach(d => {
+    if (d.naturaleza) naturalezaValues.push(d.naturaleza);
+    if (d.objeto) objetoValues.push(d.objeto);
+    [d.ataque1, d.ataque2, d.ataque3, d.ataque4].forEach(a => { if (a) ataqueValues.push(a); });
+  });
+  rebuildSuggestDatalist('suggest-champions-naturaleza', naturalezaValues);
+  rebuildSuggestDatalist('suggest-champions-objeto', objetoValues);
+  rebuildSuggestDatalist('suggest-champions-ataque', ataqueValues);
+}
 
 function ensurePokemonDatalistMazos(mode) {
   const existing = document.getElementById('pokemon-datalist-mazos');
