@@ -3138,6 +3138,8 @@ POKEMON_LISTS.tcglive.forEach(p => { dataTCGLive[p] = EMPTY_TCGLIVE(); });
 // Diccionario cargado desde moves-es.json (datos de wikidex.net). Se busca
 // sin importar mayúsculas/minúsculas, así "close combat" también matchea.
 let MOVES_ES_LOOKUP_LOWER = {};
+// Nombres en inglés tal cual (para ofrecerlos como sugerencia mientras se escribe).
+let MOVES_ES_ENGLISH_NAMES = [];
 
 async function loadMovesEsDict() {
   try {
@@ -3147,7 +3149,12 @@ async function loadMovesEsDict() {
     Object.keys(data).forEach(en => {
       if (en.startsWith('_')) return; // saltar metadata (ej. "_atribucion")
       MOVES_ES_LOOKUP_LOWER[en.trim().toLowerCase()] = data[en];
+      MOVES_ES_ENGLISH_NAMES.push(en);
     });
+    // Si el diccionario tardó en llegar y las tablas ya se habían dibujado
+    // sin sugerencias en inglés, se reconstruyen ahora que ya está disponible.
+    if (typeof rebuildChampionsSuggestions === 'function') rebuildChampionsSuggestions();
+    if (typeof rebuildGoSuggestions === 'function') rebuildGoSuggestions();
   } catch (e) {
     console.log('No se pudo cargar moves-es.json', e);
   }
@@ -4124,7 +4131,7 @@ function rebuildSuggestDatalist(id, values) {
 }
 
 function rebuildGoSuggestions() {
-  const cpValues = [], movValues = [];
+  const cpValues = [], movValues = [...MOVES_ES_ENGLISH_NAMES];
   Object.values(dataGO).forEach(d => {
     if (d.cpMax) cpValues.push(d.cpMax);
     if (d.movRapido) movValues.push(d.movRapido);
@@ -4135,7 +4142,7 @@ function rebuildGoSuggestions() {
 }
 
 function rebuildChampionsSuggestions() {
-  const naturalezaValues = [], objetoValues = [], ataqueValues = [];
+  const naturalezaValues = [], objetoValues = [], ataqueValues = [...MOVES_ES_ENGLISH_NAMES];
   Object.values(dataChampions).forEach(d => {
     if (d.naturaleza) naturalezaValues.push(d.naturaleza);
     if (d.objeto) objetoValues.push(d.objeto);
