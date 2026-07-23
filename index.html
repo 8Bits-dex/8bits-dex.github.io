@@ -2087,7 +2087,7 @@
     <!-- ===== CHAMPIONS ===== -->
     <div class="mode-section active" id="mode-section-champions">
       <div class="translate-moves-toolbar">
-        <button class="btn btn-primary" onclick="translateExistingChampionsMoves()">🌐 Traducir movimientos existentes</button>
+        <button class="btn btn-primary" onclick="translateExistingChampionsMoves()">🌐 Traducir campos existentes</button>
       </div>
       <div class="pokemon-table-wrap">
         <table id="pokemon-table-champions">
@@ -3257,8 +3257,74 @@ function bindMoveTranslationBlur(tbody) {
   });
 }
 
+// ── NATURALEZA Y OBJETO (inglés → español) ──────────────────────────────────
+// Traducción oficial ES de las 25 naturalezas (esto es 1 a 1, sin ambigüedad).
+const NATURE_NAME_ES = {
+  'hardy': 'Fuerte', 'lonely': 'Solitario', 'brave': 'Audaz', 'adamant': 'Firme',
+  'naughty': 'Pícaro', 'bold': 'Osado', 'docile': 'Dócil', 'relaxed': 'Plácido',
+  'impish': 'Agitado', 'lax': 'Floja', 'timid': 'Miedoso', 'hasty': 'Activo',
+  'serious': 'Serio', 'jolly': 'Alegre', 'naive': 'Ingenuo', 'modest': 'Modesto',
+  'mild': 'Afable', 'quiet': 'Mansa', 'bashful': 'Raro', 'rash': 'Alocado',
+  'calm': 'Tranquilo', 'gentle': 'Amable', 'sassy': 'Grosero', 'careful': 'Cauto',
+  'quirky': 'Extraño'
+};
+
+// Objetos de uso competitivo frecuente. No es exhaustiva a propósito (hay
+// cientos de objetos posibles): cubre los de uso habitual con traducción
+// oficial confirmada. Lo que no está acá se deja tal cual se escribió.
+const ITEM_NAME_ES = {
+  'leftovers': 'Restos', 'life orb': 'Vidasfera', 'choice band': 'Cinta Elegida',
+  'choice specs': 'Gafas Elegidas', 'choice scarf': 'Bufanda Elegida',
+  'focus sash': 'Banda Focus', 'assault vest': 'Chaleco Asalto',
+  'rocky helmet': 'Casco Roca', 'heavy-duty boots': 'Botas Resistentes',
+  'eviolite': 'Eviolita', 'weakness policy': 'Táctica Débil',
+  'sitrus berry': 'Baya Zidra', 'lum berry': 'Baya Zonlan', 'air balloon': 'Globo Aire',
+  'black sludge': 'Lodo Negro', 'expert belt': 'Cinta Experto', 'wide lens': 'Lupa Grande',
+  'scope lens': 'Lupa Enfoque', 'safety goggles': 'Gafas de Seguridad',
+  'mental herb': 'Hierba Mental', 'power herb': 'Hierba Energía',
+  'toxic orb': 'Bola Tóxica', 'flame orb': 'Bola Llama',
+  'booster energy': 'Energía Potenciadora', 'loaded dice': 'Dados Cargados',
+  'covert cloak': 'Capa Discreta', 'clear amulet': 'Amuleto Purificador',
+  'throat spray': 'Espray de Garganta', 'room service': 'Servicio de Habitación',
+  'mirror herb': 'Hierba Espejo', 'punching glove': 'Guante de Boxeo',
+  'grassy seed': 'Semilla Herbal', 'electric seed': 'Semilla Voltio',
+  'psychic seed': 'Semilla Psíquica', 'misty seed': 'Semilla Bruma',
+  'red card': 'Tarjeta Roja', 'eject button': 'Botón Salida', 'eject pack': 'Paquete Salida',
+  'shell bell': 'Campana Concha', 'iron ball': 'Bola de Hierro', 'light clay': 'Arcilla Ligera',
+  'never-melt ice': 'Hielo Eterno', 'charcoal': 'Carbón', 'metal coat': 'Recubrimetal',
+  'muscle band': 'Cinta Músculo', 'wise glasses': 'Lentes Sabios'
+};
+
+function translateNatureIfEnglish(value) {
+  if (!value) return null;
+  const found = NATURE_NAME_ES[value.trim().toLowerCase()];
+  return found && found !== value ? found : null;
+}
+function translateItemIfEnglish(value) {
+  if (!value) return null;
+  const found = ITEM_NAME_ES[value.trim().toLowerCase()];
+  return found && found !== value ? found : null;
+}
+
+// Se engancha en el "blur" de Naturaleza/Objeto en la tabla de Champions.
+function bindNatureItemTranslationBlur(tbody) {
+  tbody.querySelectorAll('.nature-input, .item-input').forEach(input => {
+    input.addEventListener('blur', () => {
+      const translated = input.classList.contains('nature-input')
+        ? translateNatureIfEnglish(input.value)
+        : translateItemIfEnglish(input.value);
+      if (!translated) return;
+      input.value = translated;
+      const p = input.dataset.pokemon, f = input.dataset.field;
+      if (!dataChampions[p]) dataChampions[p] = EMPTY_CHAMPIONS();
+      dataChampions[p][f] = translated;
+      persistAll();
+    });
+  });
+}
+
 function translateExistingChampionsMoves() {
-  let count = 0, tipos = 0;
+  let count = 0, tipos = 0, otros = 0;
   Object.keys(dataChampions).forEach(name => {
     const d = dataChampions[name];
     [['ataque1','tipo1'], ['ataque2','tipo2'], ['ataque3','tipo3'], ['ataque4','tipo4']].forEach(([f, tf]) => {
@@ -3269,10 +3335,14 @@ function translateExistingChampionsMoves() {
         if (knownType) { d[tf] = knownType; tipos++; }
       }
     });
+    const tn = translateNatureIfEnglish(d.naturaleza);
+    if (tn) { d.naturaleza = tn; otros++; }
+    const ti = translateItemIfEnglish(d.objeto);
+    if (ti) { d.objeto = ti; otros++; }
   });
   persistAll();
   renderTableChampions();
-  showToast(`✅ ${count} ataque(s) traducido(s), ${tipos} tipo(s) completado(s)`);
+  showToast(`✅ ${count} ataque(s), ${otros} naturaleza/objeto traducido(s), ${tipos} tipo(s) completado(s)`);
 }
 
 function translateExistingGoMoves() {
@@ -3705,8 +3775,8 @@ function renderTableChampions() {
     return `<tr data-name="${esc(name).toLowerCase()}">
       <td style="color:var(--muted);font-size:0.8rem">${i+1}</td>
       <td><input class="editable-cell name-cell" data-original-name="${esc(name)}" value="${esc(name)}" placeholder="Nombre"></td>
-      <td><input class="editable-cell" list="suggest-champions-naturaleza" data-pokemon="${esc(name)}" data-field="naturaleza" value="${esc(d.naturaleza)}" placeholder="Ej: Jolly"></td>
-      <td><input class="editable-cell" list="suggest-champions-objeto" data-pokemon="${esc(name)}" data-field="objeto" value="${esc(d.objeto)}" placeholder="Ej: Choice Band"></td>
+      <td><input class="editable-cell nature-input" list="suggest-champions-naturaleza" data-pokemon="${esc(name)}" data-field="naturaleza" value="${esc(d.naturaleza)}" placeholder="Ej: Jolly"></td>
+      <td><input class="editable-cell item-input" list="suggest-champions-objeto" data-pokemon="${esc(name)}" data-field="objeto" value="${esc(d.objeto)}" placeholder="Ej: Choice Band"></td>
       <td>
         <input class="editable-cell move-name-input" list="suggest-champions-ataque" data-pokemon="${esc(name)}" data-field="ataque1" data-game="champions" value="${esc(d.ataque1)}" placeholder="Ataque 1">
         <div class="move-type-row">
@@ -3757,6 +3827,7 @@ function renderTableChampions() {
   });
   bindNameCellEvents(tbody);
   bindMoveTranslationBlur(tbody);
+  bindNatureItemTranslationBlur(tbody);
   rebuildChampionsSuggestions();
 }
 
