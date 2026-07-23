@@ -1920,6 +1920,10 @@
   .move-type-icon-wrap { display: flex; align-items: center; }
   .move-type-icon { width: 30px; height: 30px; object-fit: contain; flex-shrink: 0; }
   .move-type-icon-empty { width: 30px; height: 30px; display: inline-block; }
+  .item-icon-wrap { display: inline-flex; margin-top: 4px; }
+  .item-icon { width: 28px; height: 28px; object-fit: contain; image-rendering: pixelated; }
+  .item-icon-empty { width: 28px; height: 28px; display: inline-block; }
+  .ri-value .item-icon { width: 24px; height: 24px; vertical-align: middle; margin-right: 6px; image-rendering: pixelated; }
   .ri-value .move-type-icon { width: 26px; height: 26px; vertical-align: middle; margin-right: 6px; }
 </style>
 </head>
@@ -2726,7 +2730,7 @@ async function showResult(name) {
       </div>
       <div class="result-item">
         <div class="ri-label">Objeto</div>
-        <div class="ri-value ${isEmpty(d.objeto)?'empty':''}">${val(d.objeto,'Sin datos')}</div>
+        <div class="ri-value ${isEmpty(d.objeto)?'empty':''}" ${getItemDescription(d.objeto) ? `title="${esc(getItemDescription(d.objeto))}"` : ''}>${d.objeto ? itemIconHTML(d.objeto) : ''}${val(d.objeto,'Sin datos')}</div>
       </div>
       <div class="result-item">
         <div class="ri-label">Ataque 1</div>
@@ -3306,19 +3310,97 @@ function translateItemIfEnglish(value) {
   return found && found !== value ? found : null;
 }
 
+// ── ÍCONO DE OBJETOS (PokeAPI) ───────────────────────────────────────────────
+// Mapeo español → slug en inglés (item-sprite-slugs.json), armado cruzando
+// wikidex.net (nombres en español) con Serebii (nombres en inglés). Las
+// imágenes se piden directo al repositorio de sprites de PokeAPI.
+let ITEM_SPRITE_SLUG_LOOKUP = {};
+
+async function loadItemSpriteSlugs() {
+  try {
+    const res = await fetch('item-sprite-slugs.json');
+    if (!res.ok) return;
+    const data = await res.json();
+    Object.keys(data).forEach(k => {
+      if (k.startsWith('_')) return;
+      ITEM_SPRITE_SLUG_LOOKUP[k.trim().toLowerCase()] = data[k];
+    });
+    if (typeof renderTableChampions === 'function' && document.getElementById('table-body-champions')) {
+      renderTableChampions();
+    }
+  } catch (e) {
+    console.log('No se pudo cargar item-sprite-slugs.json', e);
+  }
+}
+loadItemSpriteSlugs();
+
+function getItemSpriteUrl(itemName) {
+  if (!itemName) return null;
+  const slug = ITEM_SPRITE_SLUG_LOOKUP[itemName.trim().toLowerCase()];
+  if (!slug) return null;
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${slug}.png`;
+}
+
+function itemIconHTML(itemName) {
+  const url = getItemSpriteUrl(itemName);
+  if (!url) return '<span class="item-icon item-icon-empty"></span>';
+  return `<img src="${url}" class="item-icon" alt="" onerror="this.style.display='none'">`;
+}
+
 // Se engancha en el "blur" de Naturaleza/Objeto en la tabla de Champions.
+async function loadItemsDescDict() {
+  try {
+    const res = await fetch('items-desc-es.json');
+    if (!res.ok) return;
+    const data = await res.json();
+    Object.keys(data).forEach(k => {
+      if (k.startsWith('_')) return;
+      ITEM_DESC_LOOKUP_LOWER[k.trim().toLowerCase()] = data[k];
+    });
+    // Si la tabla ya se había dibujado antes de que esto cargara, se refresca.
+    if (typeof renderTableChampions === 'function' && document.getElementById('table-body-champions')) {
+      renderTableChampions();
+    }
+  } catch (e) {
+    console.log('No se pudo cargar items-desc-es.json', e);
+  }
+}
+loadItemsDescDict();
+
+function getItemDescription(itemName) {
+  if (!itemName) return '';
+  return ITEM_DESC_LOOKUP_LOWER[itemName.trim().toLowerCase()] || '';
+}
+
+// Actualiza el atributo "title" del input de Objeto (eso es lo que el
+// navegador muestra como mensaje flotante al pasar el mouse por encima) y el
+// ícono que aparece al lado.
+function updateItemTooltip(input) {
+  const desc = getItemDescription(input.value);
+  if (desc) input.title = desc;
+  else input.removeAttribute('title');
+  const wrap = input.parentElement ? input.parentElement.querySelector('.item-icon-wrap') : null;
+  if (wrap) wrap.innerHTML = itemIconHTML(input.value);
+}
+
 function bindNatureItemTranslationBlur(tbody) {
   tbody.querySelectorAll('.nature-input, .item-input').forEach(input => {
+    if (input.classList.contains('item-input')) updateItemTooltip(input);
+    input.addEventListener('input', () => {
+      if (input.classList.contains('item-input')) updateItemTooltip(input);
+    });
     input.addEventListener('blur', () => {
       const translated = input.classList.contains('nature-input')
         ? translateNatureIfEnglish(input.value)
         : translateItemIfEnglish(input.value);
-      if (!translated) return;
-      input.value = translated;
-      const p = input.dataset.pokemon, f = input.dataset.field;
-      if (!dataChampions[p]) dataChampions[p] = EMPTY_CHAMPIONS();
-      dataChampions[p][f] = translated;
-      persistAll();
+      if (translated) {
+        input.value = translated;
+        const p = input.dataset.pokemon, f = input.dataset.field;
+        if (!dataChampions[p]) dataChampions[p] = EMPTY_CHAMPIONS();
+        dataChampions[p][f] = translated;
+        persistAll();
+      }
+      if (input.classList.contains('item-input')) updateItemTooltip(input);
     });
   });
 }
@@ -3776,7 +3858,10 @@ function renderTableChampions() {
       <td style="color:var(--muted);font-size:0.8rem">${i+1}</td>
       <td><input class="editable-cell name-cell" data-original-name="${esc(name)}" value="${esc(name)}" placeholder="Nombre"></td>
       <td><input class="editable-cell nature-input" list="suggest-champions-naturaleza" data-pokemon="${esc(name)}" data-field="naturaleza" value="${esc(d.naturaleza)}" placeholder="Ej: Jolly"></td>
-      <td><input class="editable-cell item-input" list="suggest-champions-objeto" data-pokemon="${esc(name)}" data-field="objeto" value="${esc(d.objeto)}" placeholder="Ej: Choice Band"></td>
+      <td>
+        <input class="editable-cell item-input" list="suggest-champions-objeto" data-pokemon="${esc(name)}" data-field="objeto" value="${esc(d.objeto)}" placeholder="Ej: Choice Band">
+        <span class="item-icon-wrap">${itemIconHTML(d.objeto)}</span>
+      </td>
       <td>
         <input class="editable-cell move-name-input" list="suggest-champions-ataque" data-pokemon="${esc(name)}" data-field="ataque1" data-game="champions" value="${esc(d.ataque1)}" placeholder="Ataque 1">
         <div class="move-type-row">
