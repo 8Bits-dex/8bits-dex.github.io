@@ -3315,6 +3315,8 @@ function translateItemIfEnglish(value) {
 // wikidex.net (nombres en español) con Serebii (nombres en inglés). Las
 // imágenes se piden directo al repositorio de sprites de PokeAPI.
 let ITEM_SPRITE_SLUG_LOOKUP = {};
+// Diccionario cargado desde items-desc-es.json (datos de wikidex.net).
+let ITEM_DESC_LOOKUP_LOWER = {};
 
 async function loadItemSpriteSlugs() {
   try {
